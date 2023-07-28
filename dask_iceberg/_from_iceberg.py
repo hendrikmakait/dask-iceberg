@@ -3,6 +3,8 @@ from typing import Callable
 
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
+from dask_expr._expr import PartitionsFiltered, Projection
+from dask_expr.io import BlockwiseIO
 from pyarrow._fs import PyFileSystem
 from pyarrow.fs import FSSpecHandler
 from pyiceberg.expressions.visitors import bind, extract_field_ids
@@ -14,9 +16,6 @@ from pyiceberg.io.pyarrow import (
     schema_to_pyarrow,
 )
 from pyiceberg.types import ListType, MapType
-
-from dask_expr._expr import PartitionsFiltered, Projection
-from dask_expr.io import BlockwiseIO
 
 
 class FromIceberg(PartitionsFiltered, BlockwiseIO):
