@@ -1,0 +1,10 @@
+name: dask-iceberg
+channels:
+  - conda-forge
+dependencies:
+  - pytest
+  - pytest-cov
+  - pre-commit
+  - pyiceberg>=0.4.0
+  - pip:
+      - dask-expr

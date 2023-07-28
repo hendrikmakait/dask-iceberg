@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=62.6", "versioneer[toml]==0.28"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dask-iceberg"
+description = "An Apache Iceberg integration for Dask"
+maintainers = [{name = "Patrick Hoefler", email = "patrick@coiled.io"}, {name = "Hendrik Makait", email = "hendrik@coiled.io"}]
+license = {text = "BSD"}
+keywords = ["dask iceberg"]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Distributed Computing",
+]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "dask-expr",
+    "pyiceberg>=0.4.0"
+]
+
+dynamic = ["version"]
+
+[project.urls]
+"Source code" = "https://github.com/hendrikmakait/dask-iceberg/"
+
+[tool.setuptools.packages.find]
+exclude = ["*tests*"]
+namespaces = false
+
+[tool.coverage.run]
+omit = [
+    "*/test_*.py",
+]
+source = ["dask_iceberg"]
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_lines = [
+    "pragma: no cover",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+ignore_errors = true
+
+[tool.versioneer]
+VCS = "git"
+style = "pep440"
+versionfile_source = "dask_iceberg/_version.py"
+versionfile_build = "dask_iceberg/_version.py"
+tag_prefix = "v"
+parentdir_prefix = "dask-"
