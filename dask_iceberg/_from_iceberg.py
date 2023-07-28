@@ -22,8 +22,8 @@ from pyiceberg.types import ListType, MapType
 
 
 class FromIceberg(PartitionsFiltered, BlockwiseIO):
-    _parameters = ["table_scan", "_partitions"]
-    _defaults = {"_partitions": None}
+    _parameters = ["table_scan", "dtype_backend", "_partitions"]
+    _defaults = {"_partitions": None, "dtype_backend": None}
 
     @property
     def _name(self):
@@ -93,16 +93,25 @@ class FromIceberg(PartitionsFiltered, BlockwiseIO):
             ).to_table()
             chunked_delete_vectors.append(table["pos"])
 
-        types_mapper = None
-        if dask.config.get("dataframe.convert-string"):
-            types_mapper = {
+        to_pandas_kwargs = {}
+        if self.dtype_backend == "numpy_nullable":
+            from pandas.io._util import _arrow_dtype_mapping
+
+            mapping = _arrow_dtype_mapping()
+            to_pandas_kwargs["types_mapper"] = mapping.get
+
+        elif self.dtype_backend == "pyarrow":
+            to_pandas_kwargs["types_mapper"] = pd.ArrowDtype
+
+        elif dask.config.get("dataframe.convert-string"):
+            to_pandas_kwargs["types_mapper"] = {
                 pa.string(): pd.StringDtype("pyarrow"),
                 pa.large_string(): pd.StringDtype("pyarrow"),
-            }
+            }.get
 
         return self._scan_method(
             task=task, positional_deletes=chunked_delete_vectors
-        ).to_pandas(types_mapper=types_mapper)
+        ).to_pandas(**to_pandas_kwargs)
 
     @functools.cached_property
     def _scan_method(self) -> Callable:
