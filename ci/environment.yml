@@ -2,6 +2,7 @@ name: dask-iceberg
 channels:
   - conda-forge
 dependencies:
+  - mmh3
   - pytest
   - pytest-cov
   - pre-commit
