@@ -1,6 +1,9 @@
 import functools
 from typing import Callable
 
+import dask
+import pandas as pd
+import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.dataset as ds
 from dask_expr._expr import PartitionsFiltered, Projection
@@ -90,9 +93,16 @@ class FromIceberg(PartitionsFiltered, BlockwiseIO):
             ).to_table()
             chunked_delete_vectors.append(table["pos"])
 
+        types_mapper = None
+        if dask.config.get("dataframe.convert-string"):
+            types_mapper = {
+                pa.string(): pd.StringDtype("pyarrow"),
+                pa.large_string(): pd.StringDtype("pyarrow"),
+            }
+
         return self._scan_method(
             task=task, positional_deletes=chunked_delete_vectors
-        ).to_pandas()
+        ).to_pandas(types_mapper=types_mapper)
 
     @functools.cached_property
     def _scan_method(self) -> Callable:
