@@ -1,0 +1,26 @@
+[project]
+name = "dask-iceberg"
+description = "An experimental Dask integration for Apache Iceberg"
+authors = [
+    {name = "Hendrik Makait", email = "hendrik@makait.com"},
+]
+repository = "https://github.com/hendrikmakait/dask-iceberg"
+version = "0.1.0"
+readme = "README.md"
+license = "Apache License 2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "dask",
+    "distributed",
+    "pyiceberg",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+]
+
+[tool.uv.sources]
+dask = { git = "https://github.com/dask/dask" }
+distributed = { git = "https://github.com/dask/distributed" }
+pyiceberg = { git = "https://github.com/apache/iceberg-python.git" }
