@@ -14,8 +14,8 @@ from pyiceberg.manifest import FileFormat
 
 
 class ReadIceberg(PartitionsFiltered):
-    _parameters = ["table", "_partitions"]
-    _defaults = {"_partitions": None}
+    _parameters = ["table", "snapshot_id", "_partitions"]
+    _defaults = {"_partitions": None, "snapshot_id": None}
 
     def columns(self):
         return self.table.metadata.schema().column_names
@@ -38,7 +38,7 @@ class ReadIceberg(PartitionsFiltered):
 
     def _scan(self):
         # TODO: Implement filtering and projection
-        return self.table.scan()
+        return self.table.scan(snapshot_id=self.snapshot_id)
 
     def _filtered_task(self, name: Key, index: int) -> Task:
         # TODO: implement delete files

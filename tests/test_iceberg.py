@@ -36,3 +36,18 @@ def test_read_iceberg_plain(iceberg_path: str) -> None:
     pdf = table.scan().to_pandas()
     df = dask_iceberg.read_iceberg(table)
     assert_eq(df, pdf, check_index=False)
+
+
+def test_scan_iceberg_snapshot_id(iceberg_path: str) -> None:
+    table = StaticTable.from_metadata(iceberg_path)
+    pdf = table.scan(snapshot_id=7051579356916758811).to_pandas()
+
+    df = dask_iceberg.read_iceberg(table, snapshot_id=7051579356916758811)
+    assert_eq(df, pdf, check_index=False)
+
+
+def test_scan_iceberg_snapshot_id_not_found(iceberg_path: str) -> None:
+    table = StaticTable.from_metadata(iceberg_path)
+
+    with pytest.raises(ValueError, match="snapshot ID not found"):
+        dask_iceberg.read_iceberg(table, snapshot_id=1234567890).compute()
