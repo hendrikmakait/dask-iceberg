@@ -86,21 +86,20 @@ class ReadIceberg(PartitionsFiltered, BlockwiseIO):
 
     @property
     def _meta(self):
-        return (
-            self.table.metadata.schema()
-            .select(*self.columns)
-            .as_arrow()
-            .empty_table()
-            .to_pandas()
-        )
+        return self._projected_schema().empty_table().to_pandas()
+
+    def _projected_schema(self):
+        return self._scan().projection().as_arrow()
 
     def _divisions(self):
         # TODO: Can we leverage sort order to get a better estimate?
         return (None,) * (len(self._scan().plan_files()) + 1)
 
     def _scan(self):
-        # TODO: Implement filtering and projection
-        return self.table.scan(snapshot_id=self.snapshot_id)
+        # TODO: Implement advanced filtering
+        return self.table.scan(
+            snapshot_id=self.snapshot_id, selected_fields=tuple(self.columns)
+        )
 
     def _filtered_task(self, name: Key, index: int) -> Task:
         # TODO: implement delete files
@@ -117,7 +116,7 @@ class ReadIceberg(PartitionsFiltered, BlockwiseIO):
                 fragment_wrapper=FragmentWrapper(fragment, filesystem=self.fs),
                 columns=self.columns,
                 filters=self.filters,
-                schema=self.table.metadata.schema().select(*self.columns).as_arrow(),
+                schema=self._projected_schema(),
             ),
             _data_producer=True,
         )
