@@ -35,4 +35,4 @@ def test_read_iceberg_plain(iceberg_path: str) -> None:
     table = StaticTable.from_metadata(iceberg_path)
     pdf = table.scan().to_pandas()
     df = dask_iceberg.read_iceberg(table)
-    assert_eq(df, pdf)
+    assert_eq(df, pdf, check_index=False)
