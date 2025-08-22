@@ -65,3 +65,24 @@ def test_read_iceberg_column_projection_pushdown(iceberg_path: str) -> None:
     assert isinstance(optimized.expr, ReadIceberg)
     assert list(optimized.columns) == ["id", "str"]
     assert_eq(df, pdf, check_index=False)
+
+
+def test_read_iceberg_filter_on_column(iceberg_path: str) -> None:
+    table = StaticTable.from_metadata(iceberg_path)
+    pdf = table.scan(row_filter="id < 2").to_pandas()
+    df = dask_iceberg.read_iceberg(table)
+    df = df[df["id"] < 2]
+    optimized = df.optimize(fuse=False)
+    print(optimized)
+    assert isinstance(optimized.expr, ReadIceberg)
+    assert_eq(df, pdf, check_index=False)
+    # assert res.collect().rows() == [(1, "1", datetime(2023, 3, 1, 18, 15))]
+
+    # res = lf.filter(pl.col("id") == 2)
+    # assert res.collect().rows() == [(2, "2", datetime(2023, 3, 1, 19, 25))]
+
+    # res = lf.filter(pl.col("id").is_in([1, 3]))
+    # assert res.collect().rows() == [
+    #     (1, "1", datetime(2023, 3, 1, 18, 15)),
+    #     (3, "3", datetime(2023, 3, 2, 22, 0)),
+    # ]

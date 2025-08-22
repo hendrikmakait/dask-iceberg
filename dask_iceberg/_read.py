@@ -4,21 +4,44 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.dataset as pa_ds
 import pyarrow.fs as pa_fs
+import pyarrow.parquet as pq
 
 from dask._task_spec import Task
-from dask.dataframe.dask_expr._expr import PartitionsFiltered
+from dask.dataframe.dask_expr._expr import (
+    EQ,
+    GE,
+    GT,
+    LE,
+    LT,
+    NE,
+    And,
+    Filter,
+    Or,
+    PartitionsFiltered,
+    Projection,
+)
 from dask.dataframe.dask_expr._util import _convert_to_list
 from dask.dataframe.dask_expr.io import BlockwiseIO
-from dask.dataframe.dask_expr.io.parquet import FragmentWrapper, _determine_type_mapper
+from dask.dataframe.dask_expr.io.parquet import (
+    _DNF,
+    FragmentWrapper,
+    _determine_type_mapper,
+)
 from dask.typing import Key
 from dask.utils import parse_bytes
 from pyiceberg.manifest import FileFormat
 
 
 class ReadIceberg(PartitionsFiltered, BlockwiseIO):
-    _parameters = ["table", "snapshot_id", "columns", "_partitions"]
-    _defaults = {"_partitions": None, "snapshot_id": None, "columns": None}
+    _parameters = ["table", "snapshot_id", "columns", "filters", "_partitions"]
+    _defaults = {
+        "_partitions": None,
+        "snapshot_id": None,
+        "columns": None,
+        "filters": None,
+    }
     _absorb_projections = True
+    _filter_passthrough = True
 
     @property
     def columns(self):
@@ -28,8 +51,30 @@ class ReadIceberg(PartitionsFiltered, BlockwiseIO):
         else:
             return _convert_to_list(columns_operand)
 
+    def _filter_passthrough_available(self, parent, dependents):
+        return (
+            super()._filter_passthrough_available(parent, dependents)
+            and isinstance(parent.predicate, LE | GE | LT | GT | EQ | NE | And | Or)
+            and _DNF.extract_pq_filters(self, parent.predicate)._filters is not None
+        )
+
     def _simplify_up(self, parent, dependents):
-        return super()._simplify_up(parent, dependents)
+        if isinstance(parent, Projection):
+            return super()._simplify_up(parent, dependents)
+
+        if isinstance(parent, Filter) and self._filter_passthrough_available(
+            parent, dependents
+        ):
+            # Predicate pushdown
+            filters = _DNF.extract_pq_filters(self, parent.predicate)
+            if filters._filters is not None:
+                return self.substitute_parameters(
+                    {
+                        "filters": filters.combine(
+                            self.operand("filters")
+                        ).to_list_tuple()
+                    }
+                )
 
     @cached_property
     def _funcname(self):
@@ -71,25 +116,26 @@ class ReadIceberg(PartitionsFiltered, BlockwiseIO):
                 ReadIceberg._fragment_to_table,
                 fragment_wrapper=FragmentWrapper(fragment, filesystem=self.fs),
                 columns=self.columns,
+                filters=self.filters,
                 schema=self.table.metadata.schema().select(*self.columns).as_arrow(),
             ),
             _data_producer=True,
         )
 
     @staticmethod
-    def _fragment_to_table(fragment_wrapper, columns, schema):
+    def _fragment_to_table(fragment_wrapper, columns, filters, schema):
         # Copied from dask.dataframe.dask_expr.io.ReadParquetPyarrowFS._fragment_to_table
         # _maybe_adjust_cpu_count()
         if isinstance(fragment_wrapper, FragmentWrapper):
             fragment = fragment_wrapper.fragment
         else:
             fragment = fragment_wrapper
-        # if isinstance(filters, list):
-        #     filters = pq.filters_to_expression(filters)
+        if isinstance(filters, list):
+            filters = pq.filters_to_expression(filters)
         return fragment.to_table(
             schema=schema,
             columns=columns,
-            # filter=filters,
+            filter=filters,
             # Batch size determines how many rows are read at once and will
             # cause the underlying array to be split into chunks of this size~
             # (max). We'd like to avoid fragmentation as much as possible and
