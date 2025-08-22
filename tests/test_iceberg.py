@@ -10,6 +10,8 @@ from pyiceberg.table import StaticTable
 
 import dask_iceberg
 
+from dask_iceberg._read import ReadIceberg
+
 
 @pytest.fixture
 def iceberg_path() -> str:
@@ -38,7 +40,7 @@ def test_read_iceberg_plain(iceberg_path: str) -> None:
     assert_eq(df, pdf, check_index=False)
 
 
-def test_scan_iceberg_snapshot_id(iceberg_path: str) -> None:
+def test_read_iceberg_snapshot_id(iceberg_path: str) -> None:
     table = StaticTable.from_metadata(iceberg_path)
     pdf = table.scan(snapshot_id=7051579356916758811).to_pandas()
 
@@ -46,8 +48,20 @@ def test_scan_iceberg_snapshot_id(iceberg_path: str) -> None:
     assert_eq(df, pdf, check_index=False)
 
 
-def test_scan_iceberg_snapshot_id_not_found(iceberg_path: str) -> None:
+def test_read_iceberg_snapshot_id_not_found(iceberg_path: str) -> None:
     table = StaticTable.from_metadata(iceberg_path)
 
     with pytest.raises(ValueError, match="snapshot ID not found"):
         dask_iceberg.read_iceberg(table, snapshot_id=1234567890).compute()
+
+
+def test_read_iceberg_column_projection_pushdown(iceberg_path: str) -> None:
+    table = StaticTable.from_metadata(iceberg_path)
+    pdf = table.scan(selected_fields=("id", "str")).to_pandas()
+
+    df = dask_iceberg.read_iceberg(table)[["id", "str"]]
+    optimized = df.optimize(fuse=False)
+    print(optimized)
+    assert isinstance(optimized.expr, ReadIceberg)
+    assert list(optimized.columns) == ["id", "str"]
+    assert_eq(df, pdf, check_index=False)

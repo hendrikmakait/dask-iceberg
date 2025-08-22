@@ -7,18 +7,29 @@ import pyarrow.fs as pa_fs
 
 from dask._task_spec import Task
 from dask.dataframe.dask_expr._expr import PartitionsFiltered
+from dask.dataframe.dask_expr._util import _convert_to_list
+from dask.dataframe.dask_expr.io import BlockwiseIO
 from dask.dataframe.dask_expr.io.parquet import FragmentWrapper, _determine_type_mapper
 from dask.typing import Key
 from dask.utils import parse_bytes
 from pyiceberg.manifest import FileFormat
 
 
-class ReadIceberg(PartitionsFiltered):
-    _parameters = ["table", "snapshot_id", "_partitions"]
-    _defaults = {"_partitions": None, "snapshot_id": None}
+class ReadIceberg(PartitionsFiltered, BlockwiseIO):
+    _parameters = ["table", "snapshot_id", "columns", "_partitions"]
+    _defaults = {"_partitions": None, "snapshot_id": None, "columns": None}
+    _absorb_projections = True
 
+    @property
     def columns(self):
-        return self.table.metadata.schema().column_names
+        columns_operand = self.operand("columns")
+        if columns_operand is None:
+            return self.table.metadata.schema().column_names
+        else:
+            return _convert_to_list(columns_operand)
+
+    def _simplify_up(self, parent, dependents):
+        return super()._simplify_up(parent, dependents)
 
     @cached_property
     def _funcname(self):
@@ -30,7 +41,13 @@ class ReadIceberg(PartitionsFiltered):
 
     @property
     def _meta(self):
-        return self.table.metadata.schema().as_arrow().empty_table().to_pandas()
+        return (
+            self.table.metadata.schema()
+            .select(*self.columns)
+            .as_arrow()
+            .empty_table()
+            .to_pandas()
+        )
 
     def _divisions(self):
         # TODO: Can we leverage sort order to get a better estimate?
@@ -53,13 +70,14 @@ class ReadIceberg(PartitionsFiltered):
                 None,
                 ReadIceberg._fragment_to_table,
                 fragment_wrapper=FragmentWrapper(fragment, filesystem=self.fs),
-                schema=self.table.metadata.schema().as_arrow(),
+                columns=self.columns,
+                schema=self.table.metadata.schema().select(*self.columns).as_arrow(),
             ),
             _data_producer=True,
         )
 
     @staticmethod
-    def _fragment_to_table(fragment_wrapper, schema):
+    def _fragment_to_table(fragment_wrapper, columns, schema):
         # Copied from dask.dataframe.dask_expr.io.ReadParquetPyarrowFS._fragment_to_table
         # _maybe_adjust_cpu_count()
         if isinstance(fragment_wrapper, FragmentWrapper):
@@ -70,7 +88,7 @@ class ReadIceberg(PartitionsFiltered):
         #     filters = pq.filters_to_expression(filters)
         return fragment.to_table(
             schema=schema,
-            # columns=columns,
+            columns=columns,
             # filter=filters,
             # Batch size determines how many rows are read at once and will
             # cause the underlying array to be split into chunks of this size~
